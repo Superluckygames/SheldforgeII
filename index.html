@@ -1,0 +1,1362 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>방패 강화소</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Noto+Sans+KR:wght@400;500;700&display=swap">
+<style>
+/* Layout: 대장간 한 화면. 왼쪽 강화대(방패+확률+버튼), 오른쪽 상점, 아래 도감과 기록. 좁은 화면은 한 줄로 쌓는다. */
+:root {
+  --bg: #10161d;
+  --panel: #18212b;
+  --panel-2: #1f2a36;
+  --line: #2c3a49;
+  --fg: #e7edf3;
+  --muted: #8b9aab;
+  --accent: #e2ac3d;
+  --accent-ink: #2a1c00;
+  --good: #4fd08a;
+  --bad: #ff6464;
+  --glow: #c4ccd4;
+  --font-display: "Black Han Sans", "Noto Sans KR", system-ui, sans-serif;
+  --font-body: "Noto Sans KR", system-ui, -apple-system, "Apple SD Gothic Neo", sans-serif;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.5;
+  padding-block: 20px 40px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.wrap { max-width: 980px; margin: 0 auto; display: grid; gap: 16px; }
+button { font: inherit; color: inherit; cursor: pointer; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+h1, h2 { font-family: var(--font-display); font-weight: 400; margin: 0; letter-spacing: 0.01em; }
+h1 { font-size: 28px; }
+h2 { font-size: 20px; }
+.num { font-variant-numeric: tabular-nums; }
+
+.top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+.purse { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.gold { display: inline-flex; align-items: baseline; gap: 6px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 8px 14px; }
+.gold b { font-family: var(--font-display); font-weight: 400; font-size: 22px; color: var(--accent); }
+.gold span { color: var(--muted); font-size: 13px; }
+.mine-note { min-width: 64px; color: var(--good); font-weight: 700; font-size: 14px; }
+
+.btn { border: 1px solid var(--line); background: var(--panel-2); border-radius: 10px; padding: 9px 14px; font-weight: 500; transition: background .15s, transform .1s; }
+.btn:hover:not(:disabled) { background: #29384a; }
+.btn:active:not(:disabled) { transform: translateY(1px); }
+.btn:disabled { opacity: .4; cursor: not-allowed; }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; font-weight: 700; }
+.btn.primary:hover:not(:disabled) { background: #f0bb52; }
+
+.grid { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 18px; display: grid; gap: 14px; min-width: 0; }
+
+/* 강화대 */
+.stage { position: relative; display: grid; place-items: center; padding: 18px 0 8px; border-radius: 12px; background: radial-gradient(ellipse at 50% 55%, color-mix(in srgb, var(--glow) 24%, transparent), transparent 68%), var(--panel-2); min-height: 290px; }
+.shield-wrap { width: min(210px, 60%); filter: drop-shadow(0 8px 22px color-mix(in srgb, var(--glow) 45%, transparent)); }
+.shield-wrap svg { display: block; width: 100%; height: auto; overflow: visible; }
+.stage .badge { position: absolute; top: 12px; left: 14px; font-family: var(--font-display); font-size: 15px; color: var(--muted); }
+.stage .empty { position: absolute; inset: 0; display: none; place-items: center; text-align: center; color: var(--muted); padding: 24px; }
+.stage.none .shield-wrap { display: none; }
+.stage.none .empty { display: grid; }
+.stage.win .shield-wrap { animation: pop .6s ease-out; }
+.stage.fail .shield-wrap { animation: shake .45s ease-in-out; }
+.stage.break .shield-wrap { animation: shatter .7s ease-in forwards; }
+@keyframes pop { 0% { transform: scale(1); } 35% { transform: scale(1.14); filter: brightness(1.5); } 100% { transform: scale(1); } }
+@keyframes shake { 0%,100% { transform: translateX(0); } 20% { transform: translateX(-9px) rotate(-2deg); } 40% { transform: translateX(8px) rotate(2deg); } 60% { transform: translateX(-5px); } 80% { transform: translateX(4px); } }
+@keyframes shatter { 0% { transform: scale(1); opacity: 1; } 30% { transform: scale(1.08) rotate(3deg); } 100% { transform: scale(.6) rotate(-14deg) translateY(50px); opacity: 0; } }
+
+.sname { text-align: center; font-family: var(--font-display); font-size: 22px; line-height: 1.3; text-wrap: balance; }
+.odds { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 0; }
+.odds div { background: var(--panel-2); border-radius: 10px; padding: 8px 6px; text-align: center; min-width: 0; }
+.odds dt { font-size: 12px; color: var(--muted); }
+.odds dd { margin: 2px 0 0; font-weight: 700; font-size: 15px; overflow-wrap: anywhere; }
+.odds .ok { color: var(--good); }
+.odds .no { color: var(--bad); }
+.opts { display: grid; gap: 8px; }
+.opt { display: flex; align-items: center; gap: 10px; background: var(--panel-2); border-radius: 10px; padding: 9px 12px; font-size: 14px; }
+.opt input { width: 18px; height: 18px; accent-color: var(--accent); flex: none; }
+.opt small { color: var(--muted); margin-left: auto; white-space: nowrap; }
+.opt.off { opacity: .45; }
+#enhance { padding: 15px; font-size: 18px; font-family: var(--font-display); letter-spacing: .02em; }
+.result { min-height: 3em; margin: 0; text-align: center; font-weight: 500; text-wrap: balance; }
+.result.good { color: var(--good); }
+.result.bad { color: var(--bad); }
+.ask { background: var(--panel-2); border: 1px solid var(--bad); border-radius: 12px; padding: 14px; display: grid; gap: 10px; }
+.ask p { margin: 0; font-weight: 700; text-align: center; text-wrap: balance; }
+.ask-btns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+
+/* 상점 */
+.items { display: grid; gap: 10px; }
+.item { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; align-items: center; background: var(--panel-2); border-radius: 12px; padding: 12px 14px; }
+.item h3 { margin: 0; font-size: 15px; }
+.item p { margin: 0; color: var(--muted); font-size: 13px; grid-column: 1; }
+.item .buy { grid-column: 2; grid-row: 1 / span 2; min-width: 92px; display: grid; gap: 2px; text-align: center; }
+.item .buy small { color: inherit; opacity: .8; }
+.have { color: var(--accent); font-weight: 700; font-size: 13px; }
+
+/* 도감, 기록 */
+.lower { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+.codex { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; margin: 0; padding: 0; list-style: none; }
+.codex li { display: flex; gap: 8px; align-items: baseline; font-size: 13px; padding: 6px 9px; border-radius: 8px; background: var(--panel-2); color: var(--muted); min-width: 0; }
+.codex li b { font-family: var(--font-display); font-weight: 400; color: var(--muted); flex: none; }
+.codex li.got { color: var(--fg); }
+.codex li.got b { color: var(--accent); }
+.codex li.cur { outline: 1px solid var(--accent); }
+.codex li { align-items: center; }
+.codex li .ic { width: 28px; flex: none; display: block; line-height: 0; }
+.codex li .ic svg { width: 100%; height: auto; display: block; }
+.codex li:not(.got) .ic { filter: grayscale(1) brightness(.4); opacity: .6; }
+.log { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; font-size: 13px; }
+.log li { padding: 7px 10px; border-radius: 8px; background: var(--panel-2); color: var(--muted); }
+.log li:first-child { color: var(--fg); }
+.log li.good { border-left: 3px solid var(--good); }
+.log li.bad { border-left: 3px solid var(--bad); }
+.stats { color: var(--muted); font-size: 13px; margin: 0; }
+.boom { position: absolute; left: 12px; right: 12px; bottom: 10px; text-align: center; font-family: var(--font-display); font-weight: 400; font-size: 22px; line-height: 1.3; color: var(--bad); text-wrap: balance; animation: boom .5s ease-out; text-shadow: 0 2px 10px rgba(0,0,0,.6); }
+.linkbtn { background: none; border: 0; color: var(--muted); font-size: 13px; text-decoration: underline; padding: 4px; }
+.foot .adm-wrap { justify-self: end; }
+.modal { position: fixed; inset: 0; z-index: 50; background: rgba(5,9,14,.75); display: grid; place-items: start center; overflow-y: auto; padding: max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) max(16px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); }
+.sheet { width: min(780px, 100%); background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 18px; display: grid; gap: 14px; min-width: 0; }
+.sheet-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.adm-body { display: grid; gap: 14px; }
+.adm-sec { background: var(--panel-2); border-radius: 12px; padding: 14px; display: grid; gap: 10px; min-width: 0; }
+.adm-sec h3 { margin: 0; font-size: 15px; }
+.adm-sec p.note { margin: 0; color: var(--muted); font-size: 12px; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.row label { color: var(--muted); font-size: 13px; }
+.in { background: var(--bg); color: var(--fg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font: inherit; width: 130px; min-width: 0; }
+.in.sm { width: 88px; }
+.chk { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+.chk input { width: 18px; height: 18px; accent-color: var(--accent); }
+.rates { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; }
+.rates label { display: grid; gap: 2px; font-size: 12px; color: var(--muted); }
+.rates .in { width: 100%; }
+.err { color: var(--bad); margin: 0; min-height: 1.4em; font-size: 13px; }
+.ok-msg { color: var(--good); margin: 0; min-height: 1.4em; font-size: 13px; }
+textarea.in { width: 100%; min-height: 96px; font-family: ui-monospace, Menlo, monospace; font-size: 12px; }
+.sim { margin: 0; font-size: 13px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.btn.warn { border-color: var(--bad); color: var(--bad); }
+.btn.sm { padding: 6px 10px; font-size: 13px; }
+@keyframes boom { 0% { transform: scale(.6); opacity: 0; } 60% { transform: scale(1.15); } 100% { transform: scale(1); opacity: 1; } }
+.foot { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px; color: var(--muted); font-size: 13px; padding-top: 4px; }
+.foot .ver { justify-self: start; }
+.foot .maker { justify-self: center; text-align: center; }
+.foot b { color: var(--fg); letter-spacing: .06em; }
+@media (prefers-reduced-motion: reduce) { .boom { animation: none; } }
+
+@media (max-width: 800px) {
+  .grid, .lower { grid-template-columns: minmax(0, 1fr); }
+  h1 { font-size: 24px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .stage.win .shield-wrap, .stage.fail .shield-wrap { animation: none; }
+  .stage.break .shield-wrap { animation: none; opacity: .15; }
+  .btn { transition: none; }
+}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <h1>방패 강화소</h1>
+    <div class="purse">
+      <span class="mine-note num" id="mineNote" aria-live="polite"></span>
+      <button class="btn" id="mine" type="button">광산 일하기</button>
+      <div class="gold"><b class="num" id="gold">0</b><span>G</span></div>
+    </div>
+  </header>
+
+  <div class="grid">
+    <section class="panel" aria-labelledby="forgeTitle">
+      <h2 id="forgeTitle">강화대</h2>
+      <div class="stage" id="stage">
+        <span class="badge" id="badge"></span>
+        <div class="shield-wrap" id="shield"></div>
+        <div class="empty" id="empty"><div>방패 없음</div></div>
+        <b class="boom" id="boom" hidden></b>
+      </div>
+      <div class="sname" id="sname"></div>
+      <dl class="odds num">
+        <div><dt>성공</dt><dd class="ok" id="oSucc">-</dd></div>
+        <div><dt>실패하면</dt><dd id="oFail">-</dd></div>
+        <div><dt>방지권</dt><dd id="oBreak">-</dd></div>
+        <div><dt>비용</dt><dd id="oCost">-</dd></div>
+      </dl>
+      <div class="opts">
+        <label class="opt" id="optBoost"><input type="checkbox" id="useBoost"> 확률 +10%p 주문서 사용 <small id="haveBoost"></small></label>
+        <label class="opt" id="optSuper"><input type="checkbox" id="useSuper"> 슈퍼 주문서 +30%p 사용 <small id="haveSuper"></small></label>
+        <label class="opt" id="optCoupon"><input type="checkbox" id="useCoupon"> 강화비 할인 쿠폰 사용 <small id="haveCoupon"></small></label>
+      </div>
+      <button class="btn primary" id="enhance" type="button">강화하기</button>
+      <button class="btn" id="useWarp" type="button">워프권 사용</button>
+      <button class="btn" id="useBig" type="button">대형 워프권 사용</button>
+      <button class="btn" id="useRevive" type="button">부활권 사용</button>
+      <div class="ask" id="ask" hidden>
+        <p>강화에 실패했습니다. 파괴 방지권을 사용할까요?</p>
+        <div class="ask-btns">
+          <button class="btn primary" id="askYes" type="button">방지권 사용</button>
+          <button class="btn" id="askNo" type="button">사용 안 함 (파괴)</button>
+        </div>
+      </div>
+      <p class="result" id="result" aria-live="polite">실패하면 방패가 바로 부서집니다. 신중하게 도전하세요.</p>
+    </section>
+
+    <section class="panel" aria-labelledby="shopTitle">
+      <h2 id="shopTitle">상점</h2>
+      <div class="items">
+        <div class="item">
+          <h3>워프권</h3>
+          <p>사용하면 확률 없이 방패가 <span id="warpN">2</span>강 올라간다. <span class="have num" id="shopWarp"></span></p>
+          <button class="btn buy" id="buyWarp" type="button">구매<small class="num" id="pWarpTxt">100,000 G</small></button>
+        </div>
+        <div class="item">
+          <h3>대형 워프권</h3>
+          <p>사용하면 확률 없이 방패가 <span id="bigN">5</span>강 올라간다. <span class="have num" id="shopBig"></span></p>
+          <button class="btn buy" id="buyBig" type="button">구매<small class="num" id="pBigTxt">1,000,000 G</small></button>
+        </div>
+        <div class="item">
+          <h3>슈퍼 주문서</h3>
+          <p>다음 강화 한 번의 성공 확률을 30%p 올린다. 일반 주문서와 같이 쓸 수 있다. <span class="have num" id="shopSuper"></span></p>
+          <button class="btn buy" id="buySuper" type="button">구매<small class="num" id="pSuperTxt">4,000 G</small></button>
+        </div>
+        <div class="item">
+          <h3>강화비 할인 쿠폰</h3>
+          <p>다음 강화 한 번의 비용을 절반으로 줄인다. <span class="have num" id="shopCoupon"></span></p>
+          <button class="btn buy" id="buyCoupon" type="button">구매<small class="num" id="pCouponTxt">1,500 G</small></button>
+        </div>
+        <div class="item">
+          <h3>황금 곡괭이</h3>
+          <p>광산 수익이 영구적으로 50% 늘어난다. 최대 5단계. <span class="have num" id="shopPick"></span></p>
+          <button class="btn buy" id="buyPick" type="button">강화<small class="num" id="pPickTxt">3,000 G</small></button>
+        </div>
+        <div class="item">
+          <h3>골드 상자</h3>
+          <p>열면 골드가 나온다. 본전보다 적게 나올 수도, 크게 터질 수도 있다.</p>
+          <button class="btn buy" id="buyBox" type="button">열기<small class="num" id="pBoxTxt">1,000 G</small></button>
+        </div>
+        <div class="item">
+          <h3>아이템 상자</h3>
+          <p>열면 주문서, 방지권, 쿠폰, 워프권 중 하나가 나온다. 아주 드물게 부활권도 나온다.</p>
+          <button class="btn buy" id="buyChest" type="button">열기<small class="num" id="pChestTxt">20,000 G</small></button>
+        </div>
+        <div class="item">
+          <h3>대장장이 망치</h3>
+          <p>모든 강화의 성공 확률이 영구적으로 1%p 올라간다. 최대 5단계. <span class="have num" id="shopHammer"></span></p>
+          <button class="btn buy" id="buyHammer" type="button">강화<small class="num" id="pHammerTxt">20,000 G</small></button>
+        </div>
+        <div class="item">
+          <h3>광산 일꾼</h3>
+          <p>가만히 있어도 초당 골드를 번다. 최대 5단계. <span class="have num" id="shopWorker"></span></p>
+          <button class="btn buy" id="buyWorker" type="button">고용<small class="num" id="pWorkerTxt">5,000 G</small></button>
+        </div>
+        <div class="item">
+          <h3>부활권</h3>
+          <p>방패가 터진 직후에 쓰면 터지기 전 단계로 되돌린다. <span class="have num" id="shopRevive"></span></p>
+          <button class="btn buy" id="buyRevive" type="button">구매<small class="num" id="pReviveTxt">3,000,000 G</small></button>
+        </div>
+        <div class="item">
+          <h3>확률 +10%p 주문서</h3>
+          <p>다음 강화 한 번의 성공 확률을 10%p 올린다. <span class="have num" id="shopBoost"></span></p>
+          <button class="btn buy" id="buyBoost" type="button">구매<small class="num" id="pBoostTxt">600 G</small></button>
+        </div>
+        <div class="item">
+          <h3>파괴 방지권</h3>
+          <p>강화에 실패했을 때 방패가 부서지는 것을 한 번 막아 준다. 단계는 그대로 유지된다. <span class="have num" id="shopTicket"></span></p>
+          <button class="btn buy" id="buyTicket" type="button">구매<small class="num" id="pTicketTxt">2,000 G</small></button>
+        </div>
+        <div class="item">
+          <h3>현재 방패 판매</h3>
+          <p id="sellDesc">판매할 방패가 없습니다.</p>
+          <button class="btn buy" id="sell" type="button">판매<small class="num" id="sellPrice">-</small></button>
+        </div>
+      </div>
+      <p class="stats num" id="stats"></p>
+    </section>
+  </div>
+
+  <div class="lower">
+    <section class="panel" aria-labelledby="codexTitle">
+      <h2 id="codexTitle">방패 도감</h2>
+      <ul class="codex" id="codex"></ul>
+    </section>
+    <section class="panel" aria-labelledby="logTitle">
+      <h2 id="logTitle">강화 기록</h2>
+      <ul class="log" id="log" aria-live="polite"><li>아직 기록이 없습니다.</li></ul>
+    </section>
+  </div>
+
+  <footer class="foot">
+    <span class="ver">버전 <b>1.2</b></span>
+    <span class="maker">제작자 <b>LUCKY STUDIO</b></span>
+    <span class="adm-wrap"><button class="linkbtn" id="admOpen" type="button">관리자</button></span>
+  </footer>
+</div>
+
+<div class="modal" id="adminModal" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="admTitle">
+    <div class="sheet-head">
+      <h2 id="admTitle">관리자 패널</h2>
+      <div class="row">
+        <button class="btn sm" id="admLogout" type="button" hidden>로그아웃</button>
+        <button class="btn sm" id="admClose" type="button">닫기</button>
+      </div>
+    </div>
+
+    <form id="admLogin" class="adm-sec" autocomplete="off">
+      <h3>관리자 로그인</h3>
+      <div class="row">
+        <label for="admPw">비밀번호</label>
+        <input class="in" id="admPw" type="password" inputmode="numeric" autocomplete="off">
+        <button class="btn primary" type="submit">로그인</button>
+      </div>
+      <p class="err" id="admErr"></p>
+    </form>
+
+    <div class="adm-body" id="admBody" hidden>
+      <p class="ok-msg" id="admMsg" aria-live="polite"></p>
+
+      <section class="adm-sec">
+        <h3>현황</h3>
+        <pre class="sim" id="admStat"></pre>
+      </section>
+
+      <section class="adm-sec">
+        <h3>골드와 아이템</h3>
+        <div class="row">
+          <label for="admGold">골드</label>
+          <input class="in" id="admGold" type="number" min="0" step="1">
+          <button class="btn sm" id="gSet" type="button">설정</button>
+          <button class="btn sm" data-gadd="10000" type="button">+1만</button>
+          <button class="btn sm" data-gadd="1000000" type="button">+100만</button>
+          <button class="btn sm" data-gadd="100000000" type="button">+1억</button>
+        </div>
+        <div class="row">
+          <label for="admBoost">주문서</label><input class="in sm" id="admBoost" type="number" min="0" step="1">
+          <label for="admTicket">방지권</label><input class="in sm" id="admTicket" type="number" min="0" step="1">
+          <label for="admWarp">워프권</label><input class="in sm" id="admWarp" type="number" min="0" step="1">
+        </div>
+        <div class="row">
+          <label for="admBig">대형 워프권</label><input class="in sm" id="admBig" type="number" min="0" step="1">
+          <label for="admSuper">슈퍼 주문서</label><input class="in sm" id="admSuper" type="number" min="0" step="1">
+          <label for="admCoupon">쿠폰</label><input class="in sm" id="admCoupon" type="number" min="0" step="1">
+          <label for="admPick">곡괭이 Lv</label><input class="in sm" id="admPick" type="number" min="0" max="5" step="1">
+          <button class="btn sm" id="iSet" type="button">수량 설정</button>
+        </div>
+        <div class="row">
+          <label for="admHammer">망치 Lv</label><input class="in sm" id="admHammer" type="number" min="0" max="5" step="1">
+          <label for="admWorker">일꾼 Lv</label><input class="in sm" id="admWorker" type="number" min="0" max="5" step="1">
+          <label for="admRevive">부활권</label><input class="in sm" id="admRevive" type="number" min="0" step="1">
+          <button class="btn sm" id="iSet2" type="button">추가 아이템 설정</button>
+        </div>
+        <div class="row">
+          <button class="btn sm" id="bulk10" type="button">모든 아이템 +10</button>
+          <button class="btn sm" id="bulk0" type="button">모든 아이템 비우기</button>
+          <button class="btn sm" id="maxAll" type="button">곡괭이·망치·일꾼 최대</button>
+          <button class="btn sm" id="goldX2" type="button">골드 2배</button>
+          <button class="btn sm" id="goldHalf" type="button">골드 절반</button>
+        </div>
+      </section>
+
+      <section class="adm-sec">
+        <h3>방패와 도감</h3>
+        <div class="row">
+          <label for="admLevel">현재 단계</label>
+          <select class="in sm" id="admLevel"></select>
+          <button class="btn sm" id="lvSet" type="button">적용</button>
+          <button class="btn sm" id="codexAll" type="button">도감 전부 해금</button>
+          <button class="btn sm" id="codexReset" type="button">도감 초기화</button>
+        </div>
+      </section>
+
+      <section class="adm-sec">
+        <h3>치트 설정</h3>
+        <label class="chk" for="tAlwaysWin"><input type="checkbox" id="tAlwaysWin"> 강화 무조건 성공</label>
+        <label class="chk" for="tNoBreak"><input type="checkbox" id="tNoBreak"> 실패해도 방패가 터지지 않음</label>
+        <label class="chk" for="tFree"><input type="checkbox" id="tFree"> 강화 비용 무료</label>
+        <label class="chk" for="tInf"><input type="checkbox" id="tInf"> 아이템 소모 안 함 (주문서, 쿠폰, 방지권, 워프권, 부활권)</label>
+      </section>
+
+      <section class="adm-sec">
+        <h3>배율과 상점 가격</h3>
+        <div class="row">
+          <label for="mCost">강화비 배율</label><input class="in sm" id="mCost" type="number" min="0" step="any">
+          <label for="mSell">판매가 배율</label><input class="in sm" id="mSell" type="number" min="0" step="any">
+          <label for="mMine">광산 배율</label><input class="in sm" id="mMine" type="number" min="0" step="any">
+        </div>
+        <div class="row">
+          <label for="pBoostIn">주문서 가격</label><input class="in sm" id="pBoostIn" type="number" min="0" step="1">
+          <label for="pTicketIn">방지권 가격</label><input class="in sm" id="pTicketIn" type="number" min="0" step="1">
+          <label for="pWarpIn">워프권 가격</label><input class="in sm" id="pWarpIn" type="number" min="0" step="1">
+          <label for="pBigIn">대형 워프권 가격</label><input class="in sm" id="pBigIn" type="number" min="0" step="1">
+          <label for="pSuperIn">슈퍼 주문서 가격</label><input class="in sm" id="pSuperIn" type="number" min="0" step="1">
+          <label for="pCouponIn">쿠폰 가격</label><input class="in sm" id="pCouponIn" type="number" min="0" step="1">
+          <label for="pBoxIn">골드 상자 가격</label><input class="in sm" id="pBoxIn" type="number" min="0" step="1">
+          <label for="pReviveIn">부활권 가격</label><input class="in sm" id="pReviveIn" type="number" min="0" step="1">
+          <label for="pChestIn">아이템 상자 가격</label><input class="in sm" id="pChestIn" type="number" min="0" step="1">
+        </div>
+        <div class="row">
+          <button class="btn sm" id="mApply" type="button">적용</button>
+          <button class="btn sm" id="mReset" type="button">기본값으로</button>
+        </div>
+      </section>
+
+      <section class="adm-sec">
+        <h3>강화 확률 편집</h3>
+        <p class="note">각 칸은 그 단계가 될 확률(%)입니다. 예를 들어 4강 칸은 3강에서 4강으로 갈 확률이에요.</p>
+        <div class="rates" id="ratesGrid"></div>
+        <div class="row">
+          <button class="btn sm" id="rApply" type="button">확률 적용</button>
+          <button class="btn sm" id="rReset" type="button">기본 확률 복원</button>
+        </div>
+      </section>
+
+      <section class="adm-sec">
+        <h3>확률 계산기</h3>
+        <p class="note">방지권과 치트 없이, 터지면 1강으로 돌아간다고 보고 계산합니다.</p>
+        <div class="row">
+          <label for="simFrom">시작 단계</label><input class="in sm" id="simFrom" type="number" min="1" max="21" value="1">
+          <label for="simTo">목표 단계</label><input class="in sm" id="simTo" type="number" min="2" max="22" value="10">
+          <label for="simN">시뮬 횟수</label><input class="in sm" id="simN" type="number" min="100" max="200000" value="10000">
+          <button class="btn sm" id="simGo" type="button">계산</button>
+        </div>
+        <pre class="sim" id="simOut">계산 버튼을 누르면 결과가 여기에 나옵니다.</pre>
+      </section>
+
+      <section class="adm-sec">
+        <h3>게임 설정</h3>
+        <div class="row">
+          <label for="admCd">광산 쿨다운(ms)</label><input class="in sm" id="admCd" type="number" min="0" step="50">
+          <label for="admWarpN">워프권 상승 단계</label><input class="in sm" id="admWarpN" type="number" min="1" max="21" step="1">
+          <label for="admBigN">대형 워프권 상승 단계</label><input class="in sm" id="admBigN" type="number" min="1" max="21" step="1">
+          <button class="btn sm" id="setGame" type="button">적용</button>
+        </div>
+      </section>
+
+      <section class="adm-sec">
+        <h3>확률 일괄 조정</h3>
+        <div class="row">
+          <label for="rScale">모든 확률 ×</label><input class="in sm" id="rScale" type="number" min="0" step="any" value="1">
+          <button class="btn sm" id="rMul" type="button">곱하기</button>
+          <label for="rAdd">모든 확률 +%p</label><input class="in sm" id="rAdd" type="number" step="any" value="0">
+          <button class="btn sm" id="rPlus" type="button">더하기</button>
+          <button class="btn sm" id="rAll100" type="button">전부 100%</button>
+        </div>
+      </section>
+
+      <section class="adm-sec">
+        <h3>통계 편집</h3>
+        <div class="row">
+          <label for="admTries">강화 횟수</label><input class="in sm" id="admTries" type="number" min="0" step="1">
+          <label for="admWins">성공 횟수</label><input class="in sm" id="admWins" type="number" min="0" step="1">
+          <label for="admBreaks">터진 횟수</label><input class="in sm" id="admBreaks" type="number" min="0" step="1">
+          <label for="admMined">광산 횟수</label><input class="in sm" id="admMined" type="number" min="0" step="1">
+          <button class="btn sm" id="stSet" type="button">적용</button>
+        </div>
+      </section>
+
+      <section class="adm-sec">
+        <h3>자동 강화</h3>
+        <p class="note">실제 규칙대로 강화를 반복합니다. 골드가 모자라거나 목표에 도달하면 멈춥니다.</p>
+        <div class="row">
+          <label for="autoTarget">목표 단계</label><input class="in sm" id="autoTarget" type="number" min="2" max="22" step="1" value="10">
+          <label for="autoMax">최대 횟수</label><input class="in sm" id="autoMax" type="number" min="1" max="2000" step="1" value="200">
+          <label class="chk" for="autoTicket"><input type="checkbox" id="autoTicket" checked> 방지권 있으면 사용</label>
+          <button class="btn sm primary" id="autoGo" type="button">실행</button>
+        </div>
+        <pre class="sim" id="autoOut">실행하면 결과가 여기에 나옵니다.</pre>
+      </section>
+
+      <section class="adm-sec">
+        <h3>데이터 관리</h3>
+        <div class="row">
+          <button class="btn sm" id="stReset" type="button">통계 초기화</button>
+          <button class="btn sm" id="logReset" type="button">기록 지우기</button>
+          <button class="btn sm warn" id="allReset" type="button">게임 전체 초기화</button>
+        </div>
+        <label for="admExport" class="note" style="color:var(--muted);font-size:12px">현재 저장 데이터</label>
+        <textarea class="in" id="admExport" readonly></textarea>
+        <label for="admImport" class="note" style="color:var(--muted);font-size:12px">저장 데이터 붙여넣기</label>
+        <textarea class="in" id="admImport" placeholder="위에서 복사한 JSON을 붙여넣으세요"></textarea>
+        <div class="row"><button class="btn sm" id="impBtn" type="button">불러오기</button></div>
+      </section>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var KEY = "shield-forge-v1";
+  var MAX = 22;
+  var WARP = 2; /* 워프권 한 장으로 올라가는 단계 */
+  var BIGWARP = 5;
+  var PICK_COST = [3000, 10000, 40000, 150000, 500000];
+  var PICK_MAX = PICK_COST.length;
+  var NAMES = [null, "기본 방패", "레어 방패", "희귀한 방패", "에픽 방패", "신화 방패", "전설 방패", "절대 부서지는 방패", "부서진 방패", "영혼 방패", "불꽃 방패", "불꽃 영혼 방패", "용사의 영혼이 깃든 레전더리 방패", "지옥 방패", "엔더 방패", "용사 방패", "마왕 방패", "레인보우 방패", "장식품 방패", "종이 방패", "방패?", "방패☠️", "그저 고트 방패"];
+  var RATE = [null, 100, 100, 100, 95, 90, 80, 75, 70, 65, 60, 50, 45, 30, 30, 25, 20, 15, 10, 5, 3, 1, 0.5]; /* RATE[N] = N강이 될 확률(%) */
+  function rateFor(L) { var r = (S.adm && S.adm.rates) ? S.adm.rates : RATE; return r[L + 1]; }
+  function defAdm() { return { alwaysWin: false, noBreak: false, free: false, costMul: 1, sellMul: 1, mineMul: 1, pBoost: 600, pTicket: 2000, pWarp: 100000, pBig: 1000000, pSuper: 4000, pCoupon: 1500, pBox: 1000, pRevive: 3000000, pChest: 20000, mineCd: 1000, warpN: 2, bigN: 5, infItems: false, rates: null }; }
+  var HAMMER_COST = [20000, 80000, 300000, 1000000, 3000000];
+  var WORKER_COST = [5000, 20000, 80000, 300000, 1000000];
+  var WORKER_RATE = [0, 5, 15, 40, 100, 250]; /* 일꾼 단계별 초당 골드 */
+  function bonusNow() { return (S.useBoost && S.boosts > 0 ? 10 : 0) + (S.useSuper && S.supers > 0 ? 30 : 0) + S.hammer; }
+  function costNow(L) { var c = cost(L); return (S.useCoupon && S.coupons > 0) ? Math.round(c / 2) : c; }
+  var SKIN = [null,
+    [["#c4ccd4", "#66707b"], "#1b222a"],
+    [["#7cc0ff", "#2a6fd0"], "#06203f"],
+    [["#6be8c9", "#1d9c85"], "#052a24"],
+    [["#c39bff", "#6a35c9"], "#1e0a45"],
+    [["#ffa6e0", "#d03f9f"], "#3d0a2b"],
+    [["#ffd36b", "#d88a12"], "#3a2400"],
+    [["#c99a6a", "#7c5430"], "#2a1708"],
+    [["#8b909a", "#4b4f58"], "#14161a"],
+    [["#c9f6ff", "#4bb6d6"], "#07303a"],
+    [["#ffb15c", "#e5421c"], "#3a0e00"],
+    [["#ff8a4c", "#e5421c", "#6fd9f2"], "#1a0a0a"],
+    [["#fff1a8", "#ffc42e", "#ff5a3c"], "#3a1400"],
+    [["#ff4d5e", "#8f0f23", "#2a0309"], "#fff0f0"],
+    [["#6a3aa8", "#2a1250", "#0b0418"], "#9ff5e6"],
+    [["#7fb2ff", "#2f64e0", "#ffd34d"], "#0a1a45"],
+    [["#b0182e", "#4a0a5a", "#17021f"], "#ffe3e8"],
+    [["#ff5a5a", "#ffb84d", "#f4f06a", "#5fe08f", "#4db2ff", "#a46bff"], "#1a1230"],
+    [["#f6d77a", "#c9a227", "#8a6a12"], "#2a1d00"],
+    [["#fbf8ef", "#e3dccb"], "#4a4435"],
+    [["#e4e8ec", "#aeb6be"], "#2b323a"],
+    [["#3a3a44", "#0f0f14"], "#f2f2f5"],
+    [["#ffe27a", "#ffb21a", "#ff7a1a"], "#3a1a00"]
+  ];
+  function mir(s) { return '<g transform="translate(200 0) scale(-1 1)">' + s + '</g>'; }
+  var SWORD = '<path d="M100 62 L105 72 L105 124 L95 124 L95 72 Z" fill="currentColor"/><rect x="85" y="124" width="30" height="7" rx="2" fill="currentColor"/><rect x="96" y="131" width="8" height="16" rx="2" fill="currentColor"/><circle cx="100" cy="151" r="5" fill="currentColor"/>';
+  var WING = '<path d="M94 100 C80 84 62 84 50 92 C62 94 68 100 70 108 C62 108 56 112 54 118 C66 116 76 118 82 124 C76 126 72 130 72 136 C86 134 94 130 94 124 Z" fill="currentColor"/>';
+  var HORN = '<path d="M84 90 C62 92 48 74 52 50 C60 66 72 70 92 74 Z" fill="currentColor"/>';
+  var GOAT_HALF = HORN + '<path d="M76 104 L46 98 L68 116 Z" fill="currentColor"/>';
+  /* 단계별 그림. 200x240 좌표, 중심 (100,112). currentColor는 방패 글자색을 따른다. */
+  var EMBLEM = [null,
+    '<circle cx="100" cy="112" r="30" fill="none" stroke="currentColor" stroke-width="6"/><circle cx="100" cy="112" r="13" fill="currentColor"/>',
+    '<polygon points="100,72 109.99,98.25 138.04,99.64 116.17,117.25 123.51,144.36 100,129 76.49,144.36 83.83,117.25 61.96,99.64 90.01,98.25" fill="currentColor" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/>',
+    '<path d="M72 92 L88 72 L112 72 L128 92 L100 150 Z" fill="currentColor" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/><path d="M72 92 L128 92 M88 72 L100 92 L112 72 M100 92 L100 150" stroke="rgba(255,255,255,.6)" stroke-width="3" fill="none" stroke-linejoin="round"/>',
+    '<path d="M66 140 L60 90 L82 108 L100 80 L118 108 L140 90 L134 140 Z" fill="currentColor" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/><rect x="66" y="144" width="68" height="10" rx="3" fill="currentColor"/><circle cx="60" cy="84" r="5" fill="currentColor"/><circle cx="100" cy="74" r="5" fill="currentColor"/><circle cx="140" cy="84" r="5" fill="currentColor"/>',
+    '<circle cx="100" cy="112" r="20" fill="currentColor"/><circle cx="100" cy="112" r="36" fill="none" stroke="currentColor" stroke-width="10" stroke-dasharray="5 9" stroke-linecap="round"/>',
+    '<path d="M100 62 L108 76 L108 126 L92 126 L92 76 Z" fill="currentColor"/><rect x="74" y="124" width="52" height="9" rx="3" fill="currentColor"/><rect x="95" y="133" width="10" height="16" rx="3" fill="currentColor"/><circle cx="100" cy="154" r="6" fill="currentColor"/>',
+    '<path d="M100 72 L142 146 L58 146 Z" fill="none" stroke="currentColor" stroke-width="8" stroke-linejoin="round"/><rect x="96" y="96" width="8" height="26" rx="3" fill="currentColor"/><circle cx="100" cy="134" r="5" fill="currentColor"/>',
+    '<g fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round"><path d="M72 112 A28 28 0 0 1 94 85"/><path d="M110 85 A28 28 0 0 1 128 108"/><path d="M127 126 A28 28 0 0 1 102 140"/><path d="M86 138 A28 28 0 0 1 73 124"/></g><path d="M104 104 L120 98 L112 118 Z" fill="currentColor"/>',
+    '<path d="M70 152 L70 104 C70 80 84 68 100 68 C116 68 130 80 130 104 L130 152 L118 142 L109 152 L100 142 L91 152 L82 142 Z" fill="currentColor"/><circle cx="88" cy="104" r="6" fill="rgba(255,255,255,.92)"/><circle cx="112" cy="104" r="6" fill="rgba(255,255,255,.92)"/><ellipse cx="100" cy="124" rx="5" ry="7" fill="rgba(255,255,255,.92)"/>',
+    '<path d="M100 64 C112 86 134 98 130 128 C128 146 114 156 100 156 C86 156 72 146 70 128 C68 112 80 104 84 90 C90 98 92 104 94 108 C98 96 98 82 100 64 Z" fill="currentColor"/><path d="M100 118 C108 128 116 134 112 144 C110 150 105 152 100 152 C95 152 90 150 88 144 C86 136 94 130 100 118 Z" fill="rgba(255,236,170,.95)"/>',
+    '<path d="M100 64 C112 86 134 98 130 128 C128 146 114 156 100 156 C86 156 72 146 70 128 C68 112 80 104 84 90 C90 98 92 104 94 108 C98 96 98 82 100 64 Z" fill="currentColor"/><circle cx="89" cy="126" r="7" fill="rgba(255,255,255,.95)"/><circle cx="111" cy="126" r="7" fill="rgba(255,255,255,.95)"/><ellipse cx="100" cy="142" rx="4" ry="5" fill="rgba(255,255,255,.95)"/>',
+    '<circle cx="100" cy="108" r="42" fill="none" stroke="currentColor" stroke-width="5" stroke-dasharray="2 7" stroke-linecap="round"/>' + WING + mir(WING) + '<path d="M100 66 L106 80 L106 124 L94 124 L94 80 Z" fill="currentColor"/><rect x="84" y="122" width="32" height="7" rx="2" fill="currentColor"/><rect x="96" y="129" width="8" height="14" rx="2" fill="currentColor"/>',
+    '<path d="M74 100 C58 92 56 74 62 60 C72 70 84 80 90 92 Z" fill="currentColor"/>' + mir('<path d="M74 100 C58 92 56 74 62 60 C72 70 84 80 90 92 Z" fill="currentColor"/>') + '<circle cx="100" cy="116" r="32" fill="currentColor"/><path d="M80 108 L96 116 L82 123 Z" fill="rgba(0,0,0,.8)"/><path d="M120 108 L104 116 L118 123 Z" fill="rgba(0,0,0,.8)"/><path d="M84 138 L92 131 L100 139 L108 131 L116 138" stroke="rgba(0,0,0,.8)" stroke-width="4" fill="none" stroke-linejoin="round"/>',
+    '<path d="M50 112 C68 80 132 80 150 112 C132 144 68 144 50 112 Z" fill="currentColor"/><ellipse cx="100" cy="112" rx="10" ry="25" fill="#0b0418"/><ellipse cx="100" cy="112" rx="3" ry="14" fill="currentColor"/>',
+    '<g transform="rotate(45 100 112)">' + SWORD + '</g><g transform="rotate(-45 100 112)">' + SWORD + '</g>',
+    '<path d="M58 142 L52 78 L76 104 L88 70 L100 100 L112 70 L124 104 L148 78 L142 142 Z" fill="currentColor" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/><ellipse cx="100" cy="122" rx="15" ry="9" fill="#ff2a3d"/><circle cx="100" cy="122" r="4" fill="#17021f"/>',
+    '<circle cx="100" cy="116" r="44" fill="rgba(26,18,48,.85)"/><g fill="none" stroke-width="7" stroke-linecap="round"><path d="M68 138 A32 32 0 0 1 132 138" stroke="#ff4d4d"/><path d="M76 138 A24 24 0 0 1 124 138" stroke="#ffd34d"/><path d="M84 138 A16 16 0 0 1 116 138" stroke="#3fd08a"/><path d="M92 138 A8 8 0 0 1 108 138" stroke="#4db2ff"/></g>',
+    '<circle cx="100" cy="112" r="38" fill="none" stroke="currentColor" stroke-width="5"/><path d="M100 86 L120 112 L100 138 L80 112 Z" fill="currentColor"/><circle cx="100" cy="72" r="5" fill="currentColor"/><circle cx="140" cy="112" r="5" fill="currentColor"/><circle cx="100" cy="152" r="5" fill="currentColor"/><circle cx="60" cy="112" r="5" fill="currentColor"/>',
+    '<path d="M56 108 L146 78 L116 150 L102 124 Z" fill="currentColor" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/><path d="M102 124 L146 78 M102 124 L98 146 L116 150" stroke="rgba(255,255,255,.75)" stroke-width="3" fill="none" stroke-linejoin="round"/>',
+    '<text x="100" y="148" text-anchor="middle" font-size="100" fill="currentColor" font-family="Black Han Sans, Noto Sans KR, sans-serif">?</text>',
+    '<path d="M100 66 C72 66 62 86 66 108 C68 118 76 122 78 130 L78 144 L122 144 L122 130 C124 122 132 118 134 108 C138 86 128 66 100 66 Z" fill="currentColor"/><circle cx="86" cy="106" r="9" fill="#0f0f14"/><circle cx="114" cy="106" r="9" fill="#0f0f14"/><path d="M100 118 L95 129 L105 129 Z" fill="#0f0f14"/><path d="M90 135 L90 144 M100 135 L100 144 M110 135 L110 144" stroke="#0f0f14" stroke-width="3"/>',
+    GOAT_HALF + mir(GOAT_HALF) + '<path d="M80 84 L120 84 L126 108 C126 122 118 134 112 140 L112 150 C106 156 94 156 88 150 L88 140 C82 134 74 122 74 108 Z" fill="currentColor"/><ellipse cx="88" cy="106" rx="8" ry="5.5" fill="#fff2b0"/><rect x="83" y="104.5" width="10" height="3.5" fill="#3a1a00"/><ellipse cx="112" cy="106" rx="8" ry="5.5" fill="#fff2b0"/><rect x="107" y="104.5" width="10" height="3.5" fill="#3a1a00"/><circle cx="94" cy="141" r="2.5" fill="#fff2b0"/><circle cx="106" cy="141" r="2.5" fill="#fff2b0"/><path d="M95 152 L100 168 L105 152 Z" fill="currentColor"/>'
+  ];
+
+  function shieldSVG(L, uid) {
+    var skin = SKIN[L], stops = skin[0], ink = skin[1], gid = "sk" + uid;
+    var st = stops.map(function (c, i) {
+      return '<stop offset="' + (i / (stops.length - 1) * 100) + '%" stop-color="' + c + '"/>';
+    }).join("");
+    var cracks = (L === 7 || L === 8)
+      ? '<g stroke="rgba(0,0,0,.65)" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M100 8 L90 52 L110 84 L88 118 L106 156 L96 200"/>' + (L === 8 ? '<path d="M30 60 L66 82 L58 112 L86 126"/>' : '') + '</g>'
+      : '';
+    var aria = uid === "main" ? 'role="img" aria-label="' + L + '강 ' + NAMES[L] + '"' : 'aria-hidden="true"';
+    return '<svg viewBox="0 0 200 240" ' + aria + '><defs><linearGradient id="' + gid + '" x1="0" y1="0" x2="0.4" y2="1">' + st + '</linearGradient></defs>'
+      + '<path d="M100 6 L186 34 C186 122 160 192 100 236 C40 192 14 122 14 34 Z" fill="url(#' + gid + ')" stroke="rgba(255,255,255,.45)" stroke-width="4" stroke-linejoin="round"/>'
+      + '<path d="M100 26 L168 48 C168 118 148 172 100 208 C52 172 32 118 32 48 Z" fill="none" stroke="rgba(255,255,255,.28)" stroke-width="3" stroke-linejoin="round"/>'
+      + '<g color="' + ink + '">' + EMBLEM[L] + '</g>' + cracks
+      + '<text x="100" y="198" text-anchor="middle" font-size="26" fill="' + ink + '" font-family="Black Han Sans, Noto Sans KR, sans-serif">+' + L + '</text></svg>';
+  }
+
+  function cost(L) { if (S.adm.free) return 0; return Math.max(0, Math.round(30 * Math.pow(1.4, L - 1) * S.adm.costMul)); }
+  function sellPrice(L) { return Math.max(0, Math.round(60 * Math.pow(1.55, L - 1) * S.adm.sellMul)); }
+  function chanceText(n) { return (Math.round(n * 10) / 10) + "%"; }
+  function fmt(n) { return n.toLocaleString("ko-KR"); }
+  function $(id) { return document.getElementById(id); }
+
+  function fresh() {
+    return { gold: 300, level: 1, best: 1, tickets: 0, boosts: 0, warps: 0, bigs: 0, supers: 0, coupons: 0, pick: 0, tries: 0, breaks: 0, pending: false, lastBreak: "", useBoost: false, useSuper: false, useCoupon: false, hammer: 0, worker: 0, revives: 0, lastBreakLv: 0, mined: 0, wins: 0, spent: 0, ver: 3, adm: defAdm() };
+  }
+  function load() {
+    try {
+      var d = JSON.parse(localStorage.getItem(KEY));
+      if (d && typeof d.gold === "number") {
+        var s = Object.assign(fresh(), d);
+        s.adm = Object.assign(defAdm(), d.adm || {});
+        if (!(d.ver >= 2)) { s.adm.pWarp = 100000; if (s.adm.pBig === 4000000) s.adm.pBig = 1000000; } /* 이전 버전 기본 가격 갱신 */
+        if (!(d.ver >= 3) && s.adm.mineCd === 300) s.adm.mineCd = 1000; /* 광산 쿨다운 기본값 변경 */
+        s.ver = 3;
+        if (!(s.level >= 1)) s.level = 1;
+        s.lastBreak = "";
+        return s;
+      }
+    } catch (e) {}
+    return fresh();
+  }
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }
+
+  var S = load();
+  var logs = [];
+
+  function addLog(text, kind) {
+    logs.unshift({ t: text, k: kind || "" });
+    logs = logs.slice(0, 8);
+    var ul = $("log");
+    ul.innerHTML = "";
+    logs.forEach(function (l) {
+      var li = document.createElement("li");
+      li.textContent = l.t;
+      if (l.k) li.className = l.k;
+      ul.appendChild(li);
+    });
+  }
+  function say(text, kind) {
+    var r = $("result");
+    r.textContent = text;
+    r.className = "result" + (kind ? " " + kind : "");
+  }
+  function animate(cls) {
+    var st = $("stage");
+    st.classList.remove("win", "fail", "break");
+    void st.offsetWidth;
+    if (cls) st.classList.add(cls);
+  }
+
+  function paintShield(L) {
+    var stops = SKIN[L][0];
+    $("shield").innerHTML = shieldSVG(L, "main");
+    $("stage").style.setProperty("--glow", stops[Math.floor(stops.length / 2)]);
+  }
+
+  function render() {
+    WARP = S.adm.warpN;
+    BIGWARP = S.adm.bigN;
+    var L = S.level;
+    var has = L > 0;
+    var maxed = L >= MAX;
+    $("gold").textContent = fmt(S.gold);
+    $("stage").classList.toggle("none", !has);
+
+    if (has) {
+      paintShield(L);
+      $("badge").textContent = L + "강";
+      $("sname").textContent = L + "강 " + NAMES[L];
+    } else {
+      $("badge").textContent = "";
+      $("sname").textContent = "방패 없음";
+    }
+    $("boom").hidden = !S.lastBreak;
+    $("boom").textContent = S.lastBreak + "이(가) 터졌습니다! 1강으로 돌아갑니다.";
+
+    if (has && !maxed) {
+      var rate = Math.min(100, rateFor(L) + bonusNow());
+      $("oSucc").textContent = chanceText(rate);
+      $("oFail").textContent = rate >= 100 ? "없음" : "파괴";
+      $("oBreak").textContent = S.tickets + "개";
+      $("oCost").textContent = fmt(costNow(L)) + " G";
+    } else {
+      $("oSucc").textContent = "-";
+      $("oFail").textContent = "-";
+      $("oBreak").textContent = "-";
+      $("oCost").textContent = "-";
+    }
+
+    $("haveBoost").textContent = "보유 " + S.boosts;
+    $("optBoost").classList.toggle("off", S.boosts === 0);
+    $("useBoost").disabled = S.boosts === 0 || S.pending;
+    $("useBoost").checked = S.useBoost && S.boosts > 0;
+    $("haveSuper").textContent = "보유 " + S.supers;
+    $("optSuper").classList.toggle("off", S.supers === 0);
+    $("useSuper").disabled = S.supers === 0 || S.pending;
+    $("useSuper").checked = S.useSuper && S.supers > 0;
+    $("haveCoupon").textContent = "보유 " + S.coupons;
+    $("optCoupon").classList.toggle("off", S.coupons === 0);
+    $("useCoupon").disabled = S.coupons === 0 || S.pending;
+    $("useCoupon").checked = S.useCoupon && S.coupons > 0;
+    $("ask").hidden = !S.pending;
+    $("askYes").textContent = "방지권 사용 (보유 " + S.tickets + "개)";
+
+    var btn = $("enhance");
+    if (!has) { btn.textContent = "방패가 없습니다"; btn.disabled = true; }
+    else if (maxed) { btn.textContent = "최고 강화 달성"; btn.disabled = true; }
+    else { btn.textContent = "강화하기 · " + fmt(costNow(L)) + " G"; btn.disabled = S.gold < costNow(L) || S.pending; }
+
+    $("shopBoost").textContent = "보유 " + S.boosts;
+    $("shopTicket").textContent = "보유 " + S.tickets;
+    $("buyWarp").disabled = S.gold < S.adm.pWarp || S.pending;
+    $("buyBoost").disabled = S.gold < S.adm.pBoost || S.pending;
+    $("buyTicket").disabled = S.gold < S.adm.pTicket || S.pending;
+    $("sell").disabled = S.level <= 1 || S.pending;
+    $("pWarpTxt").textContent = fmt(S.adm.pWarp) + " G";
+    $("pBoostTxt").textContent = fmt(S.adm.pBoost) + " G";
+    $("pTicketTxt").textContent = fmt(S.adm.pTicket) + " G";
+    $("shopWarp").textContent = "보유 " + S.warps;
+    $("shopBig").textContent = "보유 " + S.bigs;
+    $("shopSuper").textContent = "보유 " + S.supers;
+    $("shopCoupon").textContent = "보유 " + S.coupons;
+    $("shopPick").textContent = "Lv " + S.pick + "/" + PICK_MAX + " (광산 +" + (S.pick * 50) + "%)";
+    $("buyBig").disabled = S.gold < S.adm.pBig || S.pending;
+    $("buySuper").disabled = S.gold < S.adm.pSuper || S.pending;
+    $("buyCoupon").disabled = S.gold < S.adm.pCoupon || S.pending;
+    $("buyBox").disabled = S.gold < S.adm.pBox || S.pending;
+    $("pBigTxt").textContent = fmt(S.adm.pBig) + " G";
+    $("pSuperTxt").textContent = fmt(S.adm.pSuper) + " G";
+    $("pCouponTxt").textContent = fmt(S.adm.pCoupon) + " G";
+    $("pBoxTxt").textContent = fmt(S.adm.pBox) + " G";
+    var maxedPick = S.pick >= PICK_MAX;
+    $("pPickTxt").textContent = maxedPick ? "최대" : fmt(PICK_COST[S.pick]) + " G";
+    $("buyPick").disabled = maxedPick || S.gold < PICK_COST[S.pick] || S.pending;
+    var ub = $("useBig");
+    ub.textContent = "대형 워프권 사용 (+" + BIGWARP + "강) · 보유 " + S.bigs;
+    ub.disabled = S.bigs < 1 || S.pending || S.level >= MAX;
+    $("warpN").textContent = WARP;
+    $("bigN").textContent = BIGWARP;
+    $("shopHammer").textContent = "Lv " + S.hammer + "/" + PICK_MAX + " (성공 +" + S.hammer + "%p)";
+    $("shopWorker").textContent = "Lv " + S.worker + "/" + PICK_MAX + " (초당 " + fmt(WORKER_RATE[S.worker]) + " G)";
+    $("shopRevive").textContent = "보유 " + S.revives;
+    var hMax = S.hammer >= PICK_MAX, wMax = S.worker >= PICK_MAX;
+    $("pHammerTxt").textContent = hMax ? "최대" : fmt(HAMMER_COST[S.hammer]) + " G";
+    $("pWorkerTxt").textContent = wMax ? "최대" : fmt(WORKER_COST[S.worker]) + " G";
+    $("pReviveTxt").textContent = fmt(S.adm.pRevive) + " G";
+    $("pChestTxt").textContent = fmt(S.adm.pChest) + " G";
+    $("buyHammer").disabled = hMax || S.gold < HAMMER_COST[S.hammer] || S.pending;
+    $("buyWorker").disabled = wMax || S.gold < WORKER_COST[S.worker] || S.pending;
+    $("buyRevive").disabled = S.gold < S.adm.pRevive || S.pending;
+    $("buyChest").disabled = S.gold < S.adm.pChest || S.pending;
+    var ur = $("useRevive");
+    ur.textContent = "부활권 사용 · 보유 " + S.revives;
+    ur.disabled = S.revives < 1 || S.pending || !S.lastBreak || S.lastBreakLv < 2;
+    var uw = $("useWarp");
+    uw.textContent = "워프권 사용 (+" + WARP + "강) · 보유 " + S.warps;
+    uw.disabled = S.warps < 1 || S.pending || S.level >= MAX;
+    if (has) {
+      $("sellDesc").textContent = L > 1 ? L + "강 " + NAMES[L] + "을(를) 골드로 바꾸고 1강 기본 방패로 돌아간다." : "1강 기본 방패는 팔 수 없다.";
+      $("sellPrice").textContent = L > 1 ? "+" + fmt(sellPrice(L)) + " G" : "-";
+    } else {
+      $("sellDesc").textContent = "판매할 방패가 없습니다.";
+      $("sellPrice").textContent = "-";
+    }
+    $("stats").textContent = "강화 " + fmt(S.tries) + "회 · 파괴 " + fmt(S.breaks) + "회 · 최고 " + S.best + "강";
+
+    var cx = $("codex");
+    cx.innerHTML = "";
+    for (var i = 1; i <= MAX; i++) {
+      var li = document.createElement("li");
+      var got = i <= S.best;
+      if (got) li.className = "got";
+      if (i === L) li.className += " cur";
+      var ic = document.createElement("i");
+      ic.className = "ic";
+      ic.innerHTML = shieldSVG(i, "c" + i);
+      var b = document.createElement("b");
+      b.textContent = i + "강";
+      var sp = document.createElement("span");
+      sp.textContent = got ? NAMES[i] : "???";
+      li.appendChild(ic);
+      li.appendChild(b);
+      li.appendChild(sp);
+      cx.appendChild(li);
+    }
+    save();
+  }
+
+  function enhance() {
+    var L = S.level;
+    if (L < 1 || L >= MAX || S.pending) return;
+    var couponOn = S.useCoupon && S.coupons > 0;
+    var c = costNow(L);
+    if (S.gold < c) return;
+    S.gold -= c;
+    if (couponOn && !S.adm.infItems) S.coupons--;
+    S.tries++;
+    S.spent += c;
+    S.lastBreak = "";
+
+    var rate = Math.min(100, rateFor(L) + bonusNow());
+    if (!S.adm.infItems) {
+      if (S.useBoost && S.boosts > 0) S.boosts--;
+      if (S.useSuper && S.supers > 0) S.supers--;
+    }
+    var win = S.adm.alwaysWin || Math.random() * 100 < rate;
+    var from = L + "강 " + NAMES[L];
+
+    if (win) {
+      S.level = L + 1;
+      S.wins++;
+      S.best = Math.max(S.best, S.level);
+      animate("win");
+      if (S.level === MAX) {
+        say("22강 달성! " + NAMES[MAX] + "이(가) 되었습니다. 당신이 진짜 고트입니다.", "good");
+      } else {
+        say("강화 성공! " + S.level + "강 " + NAMES[S.level], "good");
+      }
+      addLog(L + "강 → " + S.level + "강 성공", "good");
+    } else if (S.adm.noBreak) {
+      animate("fail");
+      say("강화에 실패했지만 방패는 무사합니다. (관리자 설정)", "bad");
+      addLog(from + " 강화 실패, 파괴 없음 (관리자 설정)", "bad");
+    } else if (S.tickets > 0) {
+      S.pending = true;
+      animate("fail");
+      say("강화에 실패했습니다. 방패가 부서지기 직전입니다.", "bad");
+      addLog(from + " 강화 실패, 방지권 사용 여부를 묻는 중", "bad");
+    } else {
+      S.level = 1;
+      S.breaks++;
+      S.lastBreak = from;
+      S.lastBreakLv = L;
+      animate("fail");
+      say(from + "이(가) 터졌습니다! 1강 기본 방패로 돌아갑니다.", "bad");
+      addLog(from + " 터짐", "bad");
+    }
+    if (S.boosts === 0) S.useBoost = false;
+    if (S.supers === 0) S.useSuper = false;
+    if (S.coupons === 0) S.useCoupon = false;
+    render();
+  }
+
+  $("enhance").addEventListener("click", enhance);
+  $("useBoost").addEventListener("change", function (e) { S.useBoost = e.target.checked; render(); });
+  $("useSuper").addEventListener("change", function (e) { S.useSuper = e.target.checked; render(); });
+  $("useCoupon").addEventListener("change", function (e) { S.useCoupon = e.target.checked; render(); });
+  $("askYes").addEventListener("click", function () {
+    if (!S.pending || S.tickets < 1) return;
+    if (!S.adm.infItems) S.tickets--;
+    S.pending = false;
+    animate("");
+    say("파괴 방지권으로 방패를 지켰습니다. " + S.level + "강 " + NAMES[S.level] + " 유지.", "good");
+    addLog(S.level + "강 강화 실패, 방지권으로 방패 유지", "good");
+    render();
+  });
+  $("askNo").addEventListener("click", function () {
+    if (!S.pending) return;
+    var name = S.level + "강 " + NAMES[S.level];
+    var lv = S.level;
+    S.pending = false;
+    S.level = 1;
+    S.breaks++;
+    S.lastBreak = name;
+    S.lastBreakLv = lv;
+    animate("fail");
+    say(name + "이(가) 터졌습니다! 1강 기본 방패로 돌아갑니다.", "bad");
+    addLog(name + " 터짐", "bad");
+    render();
+  });
+
+  var mineLock = 0;
+  $("mine").addEventListener("click", function () {
+    var now = Date.now(), cd = Math.max(0, S.adm.mineCd);
+    if (now < mineLock) return;
+    mineLock = now + cd;
+    var btn = this;
+    if (cd > 0) {
+      btn.disabled = true;
+      setTimeout(function () { btn.disabled = false; }, cd);
+    }
+    var g = Math.round((40 + Math.floor(Math.random() * 61)) * S.adm.mineMul * (1 + 0.5 * S.pick));
+    S.gold += g;
+    S.mined++;
+    $("mineNote").textContent = "+" + g + " G";
+    render();
+  });
+  setInterval(function () {
+    var r = WORKER_RATE[S.worker];
+    if (r > 0) { S.gold += r; render(); }
+  }, 1000);
+  function buyItem(key, price, label, give) {
+    if (S.gold < price || S.pending) return;
+    S.gold -= price;
+    give();
+    addLog(label + " 구매 (-" + fmt(price) + " G)");
+    render();
+  }
+  $("buyBig").addEventListener("click", function () { buyItem("bigs", S.adm.pBig, "대형 워프권", function () { S.bigs++; }); });
+  $("buySuper").addEventListener("click", function () { buyItem("supers", S.adm.pSuper, "슈퍼 주문서", function () { S.supers++; }); });
+  $("buyCoupon").addEventListener("click", function () { buyItem("coupons", S.adm.pCoupon, "할인 쿠폰", function () { S.coupons++; }); });
+  $("buyPick").addEventListener("click", function () {
+    if (S.pick >= PICK_MAX) return;
+    buyItem("pick", PICK_COST[S.pick], "황금 곡괭이 " + (S.pick + 1) + "단계", function () { S.pick++; });
+    say("곡괭이가 강해졌습니다. 광산 수익 +" + (S.pick * 50) + "%", "good");
+  });
+  $("buyBox").addEventListener("click", function () {
+    var p = S.adm.pBox;
+    if (S.gold < p || S.pending) return;
+    var r = Math.random(), g;
+    if (r < 0.5) g = 300 + Math.floor(Math.random() * 501);
+    else if (r < 0.85) g = 1000 + Math.floor(Math.random() * 1501);
+    else if (r < 0.99) g = 3000 + Math.floor(Math.random() * 3001);
+    else g = 20000;
+    S.gold += g - p;
+    var good = g >= p;
+    say("골드 상자에서 " + fmt(g) + " G가 나왔습니다." + (g === 20000 ? " 대박!" : ""), good ? "good" : "bad");
+    addLog("골드 상자 " + fmt(g) + " G (" + (g - p >= 0 ? "+" : "") + fmt(g - p) + " G)", good ? "good" : "bad");
+    render();
+  });
+  function warpBy(key, n, label) {
+    if (S[key] < 1 || S.pending || S.level >= MAX) return;
+    var from = S.level;
+    if (!S.adm.infItems) S[key]--;
+    S.lastBreak = "";
+    S.level = Math.min(MAX, S.level + n);
+    S.best = Math.max(S.best, S.level);
+    animate("win");
+    say(label + " 사용! " + from + "강에서 " + S.level + "강 " + NAMES[S.level] + "으로 올라갔습니다.", "good");
+    addLog(label + " 사용 " + from + "강 → " + S.level + "강", "good");
+    render();
+  }
+  $("useBig").addEventListener("click", function () { warpBy("bigs", BIGWARP, "대형 워프권"); });
+  $("buyHammer").addEventListener("click", function () {
+    if (S.hammer >= PICK_MAX) return;
+    buyItem("hammer", HAMMER_COST[S.hammer], "대장장이 망치 " + (S.hammer + 1) + "단계", function () { S.hammer++; });
+    say("망치가 강해졌습니다. 모든 강화 성공 확률 +" + S.hammer + "%p", "good");
+  });
+  $("buyWorker").addEventListener("click", function () {
+    if (S.worker >= PICK_MAX) return;
+    buyItem("worker", WORKER_COST[S.worker], "광산 일꾼 " + (S.worker + 1) + "단계", function () { S.worker++; });
+    say("일꾼을 고용했습니다. 초당 " + fmt(WORKER_RATE[S.worker]) + " G를 법니다.", "good");
+  });
+  $("buyRevive").addEventListener("click", function () { buyItem("revives", S.adm.pRevive, "부활권", function () { S.revives++; }); });
+  $("useRevive").addEventListener("click", function () {
+    if (S.revives < 1 || S.pending || !S.lastBreak || S.lastBreakLv < 2) return;
+    if (!S.adm.infItems) S.revives--;
+    S.level = S.lastBreakLv;
+    S.lastBreak = "";
+    animate("win");
+    say("부활! " + S.level + "강 " + NAMES[S.level] + "이(가) 돌아왔습니다.", "good");
+    addLog("부활권 사용, " + S.level + "강 복구", "good");
+    render();
+  });
+  $("buyChest").addEventListener("click", function () {
+    var p = S.adm.pChest;
+    if (S.gold < p || S.pending) return;
+    S.gold -= p;
+    var r = Math.random(), name;
+    if (r < 0.3) { S.boosts += 2; name = "확률 주문서 2개"; }
+    else if (r < 0.5) { S.supers++; name = "슈퍼 주문서"; }
+    else if (r < 0.7) { S.tickets++; name = "파괴 방지권"; }
+    else if (r < 0.85) { S.coupons += 2; name = "할인 쿠폰 2개"; }
+    else if (r < 0.97) { S.warps++; name = "워프권"; }
+    else { S.revives++; name = "부활권"; }
+    say("아이템 상자에서 " + name + "이(가) 나왔습니다.", "good");
+    addLog("아이템 상자: " + name + " (-" + fmt(p) + " G)", "good");
+    render();
+  });
+  $("useWarp").addEventListener("click", function () {
+    if (S.warps < 1 || S.pending || S.level >= MAX) return;
+    var from = S.level;
+    S.warps--;
+    S.lastBreak = "";
+    S.level = Math.min(MAX, S.level + WARP);
+    S.best = Math.max(S.best, S.level);
+    animate("win");
+    say("워프! " + from + "강에서 " + S.level + "강 " + NAMES[S.level] + "으로 올라갔습니다.", "good");
+    addLog("워프권 사용 " + from + "강 → " + S.level + "강", "good");
+    render();
+  });
+  $("buyWarp").addEventListener("click", function () {
+    var p = S.adm.pWarp;
+    if (S.gold < p) return;
+    S.gold -= p;
+    S.warps++;
+    addLog("워프권 구매 (-" + fmt(p) + " G)");
+    render();
+  });
+  $("buyBoost").addEventListener("click", function () {
+    var p = S.adm.pBoost;
+    if (S.gold < p) return;
+    S.gold -= p;
+    S.boosts++;
+    addLog("확률 주문서 구매 (-" + fmt(p) + " G)");
+    render();
+  });
+  $("buyTicket").addEventListener("click", function () {
+    var p = S.adm.pTicket;
+    if (S.gold < p) return;
+    S.gold -= p;
+    S.tickets++;
+    addLog("파괴 방지권 구매 (-" + fmt(p) + " G)");
+    render();
+  });
+  $("sell").addEventListener("click", function () {
+    if (S.level < 2 || S.pending) return;
+    var p = sellPrice(S.level);
+    var name = S.level + "강 " + NAMES[S.level];
+    S.gold += p;
+    S.level = 1;
+    S.lastBreak = "";
+    animate("");
+    say(name + "을(를) " + fmt(p) + " G에 팔았습니다. 1강 기본 방패로 돌아갑니다.", "good");
+    addLog(name + " 판매 (+" + fmt(p) + " G)", "good");
+    render();
+  });
+
+  /* ---- 관리자 패널 ---- */
+  var PW = "885218";
+  var authed = false;
+
+  (function buildAdm() {
+    var sel = $("admLevel");
+    for (var i = 1; i <= MAX; i++) {
+      var o = document.createElement("option");
+      o.value = i;
+      o.textContent = i + "강";
+      sel.appendChild(o);
+    }
+    var rg = $("ratesGrid");
+    for (var n = 2; n <= MAX; n++) {
+      var lab = document.createElement("label");
+      lab.setAttribute("for", "rt" + n);
+      lab.textContent = n + "강 %";
+      var inp = document.createElement("input");
+      inp.className = "in";
+      inp.id = "rt" + n;
+      inp.type = "number";
+      inp.min = "0";
+      inp.max = "100";
+      inp.step = "any";
+      lab.appendChild(inp);
+      rg.appendChild(lab);
+    }
+  })();
+
+  function admMsg(t, bad) {
+    var m = $("admMsg");
+    m.textContent = t;
+    m.className = bad ? "err" : "ok-msg";
+  }
+  function done(t) {
+    addLog("[관리자] " + t);
+    render();
+    fillAdm();
+    admMsg(t);
+  }
+  function intv(id, min) {
+    var v = Math.floor(parseFloat($(id).value));
+    return isFinite(v) ? Math.max(min, v) : null;
+  }
+  function fltv(id) {
+    var v = parseFloat($(id).value);
+    return isFinite(v) && v >= 0 ? v : null;
+  }
+  function fillAdm() {
+    var a = S.adm;
+    $("admGold").value = S.gold;
+    $("admBoost").value = S.boosts;
+    $("admTicket").value = S.tickets;
+    $("admWarp").value = S.warps;
+    $("admHammer").value = S.hammer;
+    $("admWorker").value = S.worker;
+    $("admRevive").value = S.revives;
+    $("admCd").value = a.mineCd;
+    $("admWarpN").value = a.warpN;
+    $("admBigN").value = a.bigN;
+    $("admTries").value = S.tries;
+    $("admWins").value = S.wins;
+    $("admBreaks").value = S.breaks;
+    $("admMined").value = S.mined;
+    $("tInf").checked = a.infItems;
+    $("pReviveIn").value = a.pRevive;
+    $("pChestIn").value = a.pChest;
+    $("admStat").textContent =
+      "강화 " + fmt(S.tries) + "회 (성공 " + fmt(S.wins) + "회, 성공률 " + (S.tries ? (S.wins / S.tries * 100).toFixed(1) : "0.0") + "%)\n" +
+      "터짐 " + fmt(S.breaks) + "회 · 광산 " + fmt(S.mined) + "회\n" +
+      "강화에 쓴 골드 " + fmt(S.spent) + " G · 최고 " + S.best + "강\n" +
+      "곡괭이 Lv " + S.pick + " · 망치 Lv " + S.hammer + " · 일꾼 Lv " + S.worker + " (초당 " + fmt(WORKER_RATE[S.worker]) + " G)";
+    $("admBig").value = S.bigs;
+    $("admSuper").value = S.supers;
+    $("admCoupon").value = S.coupons;
+    $("admPick").value = S.pick;
+    $("admLevel").value = S.level;
+    $("tAlwaysWin").checked = a.alwaysWin;
+    $("tNoBreak").checked = a.noBreak;
+    $("tFree").checked = a.free;
+    $("mCost").value = a.costMul;
+    $("mSell").value = a.sellMul;
+    $("mMine").value = a.mineMul;
+    $("pBoostIn").value = a.pBoost;
+    $("pTicketIn").value = a.pTicket;
+    $("pWarpIn").value = a.pWarp;
+    $("pBigIn").value = a.pBig;
+    $("pSuperIn").value = a.pSuper;
+    $("pCouponIn").value = a.pCoupon;
+    $("pBoxIn").value = a.pBox;
+    var r = a.rates || RATE;
+    for (var n = 2; n <= MAX; n++) $("rt" + n).value = r[n];
+    $("admExport").value = JSON.stringify(S);
+  }
+  function showAdm() {
+    $("admLogin").hidden = authed;
+    $("admBody").hidden = !authed;
+    $("admLogout").hidden = !authed;
+    if (authed) fillAdm();
+  }
+  function openAdmin() {
+    $("adminModal").hidden = false;
+    showAdm();
+    (authed ? $("admClose") : $("admPw")).focus();
+  }
+  function closeAdmin() {
+    $("adminModal").hidden = true;
+    $("admOpen").focus();
+  }
+
+  $("admOpen").addEventListener("click", openAdmin);
+  $("admClose").addEventListener("click", closeAdmin);
+  $("adminModal").addEventListener("click", function (e) { if (e.target === this) closeAdmin(); });
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && !$("adminModal").hidden) closeAdmin();
+  });
+  $("admLogout").addEventListener("click", function () { authed = false; showAdm(); $("admPw").focus(); });
+  $("admLogin").addEventListener("submit", function (e) {
+    e.preventDefault();
+    if ($("admPw").value === PW) {
+      authed = true;
+      $("admErr").textContent = "";
+      $("admPw").value = "";
+      addLog("[관리자] 로그인");
+      showAdm();
+      admMsg("관리자로 로그인했습니다.");
+    } else {
+      $("admErr").textContent = "비밀번호가 틀렸습니다.";
+      $("admPw").value = "";
+      $("admPw").focus();
+    }
+  });
+
+  $("gSet").addEventListener("click", function () {
+    var v = intv("admGold", 0);
+    if (v === null) return admMsg("골드에 숫자를 입력하세요.", true);
+    S.gold = v;
+    done("골드를 " + fmt(v) + " G로 설정");
+  });
+  Array.prototype.forEach.call(document.querySelectorAll("[data-gadd]"), function (b) {
+    b.addEventListener("click", function () {
+      var v = parseInt(b.getAttribute("data-gadd"), 10);
+      S.gold += v;
+      done("골드 +" + fmt(v) + " G 지급");
+    });
+  });
+  $("iSet").addEventListener("click", function () {
+    var a = intv("admBoost", 0), b = intv("admTicket", 0), c = intv("admWarp", 0);
+    var d = intv("admBig", 0), e = intv("admSuper", 0), f = intv("admCoupon", 0), g = intv("admPick", 0);
+    if ([a, b, c, d, e, f, g].indexOf(null) !== -1) return admMsg("수량에 숫자를 입력하세요.", true);
+    S.boosts = a;
+    S.tickets = b;
+    S.warps = c;
+    S.bigs = d;
+    S.supers = e;
+    S.coupons = f;
+    S.pick = Math.min(PICK_MAX, g);
+    done("아이템 수량 설정 (주문서 " + a + ", 방지권 " + b + ", 워프권 " + c + ", 대형 워프권 " + d + ", 슈퍼 주문서 " + e + ", 쿠폰 " + f + ", 곡괭이 Lv " + S.pick + ")");
+  });
+  $("lvSet").addEventListener("click", function () {
+    var v = parseInt($("admLevel").value, 10);
+    S.level = v;
+    S.best = Math.max(S.best, v);
+    S.pending = false;
+    S.lastBreak = "";
+    done("방패를 " + v + "강으로 변경");
+  });
+  $("codexAll").addEventListener("click", function () { S.best = MAX; done("도감 전부 해금"); });
+  $("codexReset").addEventListener("click", function () { S.best = S.level; done("도감 초기화"); });
+
+  $("tAlwaysWin").addEventListener("change", function (e) { S.adm.alwaysWin = e.target.checked; done("무조건 성공 " + (e.target.checked ? "켬" : "끔")); });
+  $("tNoBreak").addEventListener("change", function (e) { S.adm.noBreak = e.target.checked; done("파괴 없음 " + (e.target.checked ? "켬" : "끔")); });
+  $("tInf").addEventListener("change", function (e) { S.adm.infItems = e.target.checked; done("아이템 소모 안 함 " + (e.target.checked ? "켬" : "끔")); });
+  $("iSet2").addEventListener("click", function () {
+    var h = intv("admHammer", 0), w = intv("admWorker", 0), r = intv("admRevive", 0);
+    if ([h, w, r].indexOf(null) !== -1) return admMsg("수량에 숫자를 입력하세요.", true);
+    S.hammer = Math.min(PICK_MAX, h);
+    S.worker = Math.min(PICK_MAX, w);
+    S.revives = r;
+    done("망치 Lv " + S.hammer + ", 일꾼 Lv " + S.worker + ", 부활권 " + r + "개로 설정");
+  });
+  $("bulk10").addEventListener("click", function () {
+    S.boosts += 10; S.tickets += 10; S.warps += 10; S.bigs += 10; S.supers += 10; S.coupons += 10; S.revives += 10;
+    done("모든 아이템 +10 지급");
+  });
+  $("bulk0").addEventListener("click", function () {
+    S.boosts = 0; S.tickets = 0; S.warps = 0; S.bigs = 0; S.supers = 0; S.coupons = 0; S.revives = 0;
+    done("모든 아이템을 비웠습니다");
+  });
+  $("maxAll").addEventListener("click", function () { S.pick = PICK_MAX; S.hammer = PICK_MAX; S.worker = PICK_MAX; done("곡괭이, 망치, 일꾼을 최대로 설정"); });
+  $("goldX2").addEventListener("click", function () { S.gold *= 2; done("골드 2배"); });
+  $("goldHalf").addEventListener("click", function () { S.gold = Math.floor(S.gold / 2); done("골드 절반"); });
+  $("setGame").addEventListener("click", function () {
+    var cd = intv("admCd", 0), w = intv("admWarpN", 1), b = intv("admBigN", 1);
+    if ([cd, w, b].indexOf(null) !== -1) return admMsg("숫자를 입력하세요.", true);
+    S.adm.mineCd = cd;
+    S.adm.warpN = Math.min(21, w);
+    S.adm.bigN = Math.min(21, b);
+    done("광산 쿨다운 " + cd + "ms, 워프권 +" + S.adm.warpN + "강, 대형 워프권 +" + S.adm.bigN + "강");
+  });
+  function rateEdit(fn, label) {
+    var arr = (S.adm.rates || RATE).slice();
+    for (var n = 2; n <= MAX; n++) arr[n] = Math.round(Math.min(100, Math.max(0, fn(arr[n]))) * 100) / 100;
+    S.adm.rates = arr;
+    done(label);
+  }
+  $("rMul").addEventListener("click", function () {
+    var m = fltv("rScale");
+    if (m === null) return admMsg("0 이상의 숫자를 입력하세요.", true);
+    rateEdit(function (v) { return v * m; }, "모든 확률 ×" + m);
+  });
+  $("rPlus").addEventListener("click", function () {
+    var a = parseFloat($("rAdd").value);
+    if (!isFinite(a)) return admMsg("숫자를 입력하세요.", true);
+    rateEdit(function (v) { return v + a; }, "모든 확률 " + (a >= 0 ? "+" : "") + a + "%p");
+  });
+  $("rAll100").addEventListener("click", function () { rateEdit(function () { return 100; }, "모든 확률을 100%로 설정"); });
+  $("stSet").addEventListener("click", function () {
+    var t = intv("admTries", 0), w = intv("admWins", 0), b = intv("admBreaks", 0), m = intv("admMined", 0);
+    if ([t, w, b, m].indexOf(null) !== -1) return admMsg("숫자를 입력하세요.", true);
+    S.tries = t; S.wins = w; S.breaks = b; S.mined = m;
+    done("통계를 수정했습니다");
+  });
+  $("autoGo").addEventListener("click", function () {
+    var target = intv("autoTarget", 2), max = intv("autoMax", 1), out = $("autoOut");
+    if (target === null || max === null || target > MAX) { out.textContent = "목표 단계(2~22)와 최대 횟수를 확인하세요."; return; }
+    if (S.level >= target) { out.textContent = "이미 목표 단계 이상입니다."; return; }
+    if (S.pending) { out.textContent = "방지권 사용 여부를 먼저 선택하세요."; return; }
+    max = Math.min(2000, max);
+    var useT = $("autoTicket").checked;
+    var t0 = S.tries, w0 = S.wins, b0 = S.breaks, g0 = S.gold, l0 = S.level, why = "최대 횟수 도달";
+    while (S.tries - t0 < max) {
+      if (S.level >= target) { why = "목표 도달"; break; }
+      if (S.gold < costNow(S.level)) { why = "골드 부족"; break; }
+      enhance();
+      if (S.pending) (useT ? $("askYes") : $("askNo")).click();
+    }
+    if (S.level >= target) why = "목표 도달";
+    var msg = "자동 강화 " + (S.tries - t0) + "회 (" + l0 + "강 → " + S.level + "강, " + why + ")";
+    done(msg);
+    out.textContent = msg + "\n성공 " + (S.wins - w0) + "회 · 터짐 " + (S.breaks - b0) + "회\n골드 " + fmt(g0) + " → " + fmt(S.gold) + " G";
+  });
+  $("tFree").addEventListener("change", function (e) { S.adm.free = e.target.checked; done("강화 비용 무료 " + (e.target.checked ? "켬" : "끔")); });
+
+  $("mApply").addEventListener("click", function () {
+    var cm = fltv("mCost"), sm = fltv("mSell"), mm = fltv("mMine");
+    var pb = intv("pBoostIn", 0), pt = intv("pTicketIn", 0), pw = intv("pWarpIn", 0);
+    var pg = intv("pBigIn", 0), ps = intv("pSuperIn", 0), pc = intv("pCouponIn", 0), px = intv("pBoxIn", 0);
+    var pr = intv("pReviveIn", 0), pch = intv("pChestIn", 0);
+    if ([cm, sm, mm, pb, pt, pw, pg, ps, pc, px, pr, pch].indexOf(null) !== -1) return admMsg("배율과 가격에 0 이상의 숫자를 입력하세요.", true);
+    S.adm.costMul = cm; S.adm.sellMul = sm; S.adm.mineMul = mm;
+    S.adm.pBoost = pb; S.adm.pTicket = pt; S.adm.pWarp = pw;
+    S.adm.pBig = pg; S.adm.pSuper = ps; S.adm.pCoupon = pc; S.adm.pBox = px;
+    S.adm.pRevive = pr; S.adm.pChest = pch;
+    done("배율과 상점 가격 적용");
+  });
+  $("mReset").addEventListener("click", function () {
+    var d = defAdm();
+    ["costMul", "sellMul", "mineMul", "pBoost", "pTicket", "pWarp", "pBig", "pSuper", "pCoupon", "pBox", "pRevive", "pChest"].forEach(function (k) { S.adm[k] = d[k]; });
+    done("배율과 상점 가격을 기본값으로 되돌림");
+  });
+
+  $("rApply").addEventListener("click", function () {
+    var arr = RATE.slice();
+    for (var n = 2; n <= MAX; n++) {
+      var v = parseFloat($("rt" + n).value);
+      if (!isFinite(v) || v < 0 || v > 100) return admMsg(n + "강 확률은 0에서 100 사이여야 합니다.", true);
+      arr[n] = v;
+    }
+    S.adm.rates = arr;
+    done("강화 확률 적용");
+  });
+  $("rReset").addEventListener("click", function () { S.adm.rates = null; done("강화 확률을 기본값으로 복원"); });
+
+  function big(n) { return n >= 1e12 ? n.toExponential(2) : fmt(Math.round(n)); }
+  $("simGo").addEventListener("click", function () {
+    var from = parseInt($("simFrom").value, 10), to = parseInt($("simTo").value, 10);
+    var trials = Math.min(200000, Math.max(100, parseInt($("simN").value, 10) || 10000));
+    var out = $("simOut");
+    if (!(from >= 1 && to <= MAX && from < to)) { out.textContent = "시작 단계는 목표 단계보다 작아야 합니다."; return; }
+    function p(k) { return Math.min(1, rateFor(k) / 100); }
+    var reach = 1, k;
+    for (k = from; k < to; k++) reach *= p(k);
+    var a = [], b = [], c = [];
+    a[to] = 0; b[to] = 0; c[to] = 0;
+    for (k = to - 1; k >= 1; k--) {
+      a[k] = 1 + p(k) * a[k + 1];
+      b[k] = p(k) * b[k + 1] + (1 - p(k));
+      c[k] = cost(k) + p(k) * c[k + 1];
+    }
+    var lines = ["한 번도 안 터지고 " + from + "강에서 " + to + "강까지 갈 확률: " + (reach * 100).toPrecision(3) + "%"];
+    if (1 - b[1] > 1e-15 && reach > 0) {
+      var x = a[1] / (1 - b[1]), xc = c[1] / (1 - b[1]);
+      var attempts = a[from] + b[from] * x;
+      var gold = c[from] + b[from] * xc;
+      lines.push("터지면 1강에서 다시 시작할 때 기대 강화 횟수: 약 " + big(attempts) + "회");
+      lines.push("기대 강화 비용: 약 " + big(gold) + " G");
+    } else {
+      lines.push("확률이 0%인 구간이 있어 도달할 수 없습니다.");
+    }
+    var counts = [], sum = 0, i;
+    for (i = 0; i <= MAX; i++) counts[i] = 0;
+    for (i = 0; i < trials; i++) {
+      var L = from;
+      while (L < to && Math.random() < p(L)) L++;
+      counts[L]++;
+      sum += L;
+    }
+    var mode = from;
+    for (i = from; i <= to; i++) if (counts[i] > counts[mode]) mode = i;
+    lines.push("한 번 도전하고 터질 때까지 (" + fmt(trials) + "회 시뮬레이션): 평균 " + (sum / trials).toFixed(2) + "강, 가장 많이 멈춘 단계 " + mode + "강, 목표 도달 " + counts[to] + "회");
+    out.textContent = lines.join("\n");
+  });
+
+  $("stReset").addEventListener("click", function () { S.tries = 0; S.breaks = 0; done("통계 초기화"); });
+  $("logReset").addEventListener("click", function () {
+    logs = [];
+    $("log").innerHTML = "<li>아직 기록이 없습니다.</li>";
+    admMsg("기록을 지웠습니다.");
+  });
+  var resetTimer = null;
+  $("allReset").addEventListener("click", function () {
+    var btn = this;
+    if (!resetTimer) {
+      btn.textContent = "정말 초기화합니다. 한 번 더 누르세요";
+      resetTimer = setTimeout(function () { resetTimer = null; btn.textContent = "게임 전체 초기화"; }, 4000);
+      return;
+    }
+    clearTimeout(resetTimer);
+    resetTimer = null;
+    btn.textContent = "게임 전체 초기화";
+    S = fresh();
+    logs = [];
+    $("log").innerHTML = "<li>아직 기록이 없습니다.</li>";
+    say("게임을 처음부터 다시 시작합니다.", "good");
+    render();
+    fillAdm();
+    admMsg("게임 전체를 초기화했습니다.");
+  });
+  $("impBtn").addEventListener("click", function () {
+    try {
+      var d = JSON.parse($("admImport").value);
+      if (!d || typeof d.gold !== "number") throw new Error("bad");
+      var s = Object.assign(fresh(), d);
+      s.adm = Object.assign(defAdm(), d.adm || {});
+      if (!(s.level >= 1 && s.level <= MAX)) s.level = 1;
+      s.lastBreak = "";
+      S = s;
+      $("admImport").value = "";
+      done("저장 데이터를 불러왔습니다");
+    } catch (e) {
+      admMsg("불러오지 못했습니다. 올바른 저장 데이터인지 확인하세요.", true);
+    }
+  });
+
+  render();
+})();
+</script>
+
+</body></html>
